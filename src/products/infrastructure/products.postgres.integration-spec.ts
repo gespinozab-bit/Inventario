@@ -40,7 +40,6 @@ describe('Products PostgreSQL integration', () => {
     await prisma.category.deleteMany({
       where: { name: { startsWith: 'B8 ' } },
     });
-    await prisma.category.create({ data: { name: categoryName } });
   });
 
   afterAll(async () => {
@@ -81,7 +80,7 @@ describe('Products PostgreSQL integration', () => {
     expect(columns).toEqual([{ column_name: 'categoryId', is_nullable: 'NO' }]);
   });
 
-  it('creates products linked to an existing category', async () => {
+  it('creates and reuses a category inside transactions', async () => {
     const first = await repository.create({
       sku: skus[0],
       name: 'Integration one',
@@ -109,19 +108,20 @@ describe('Products PostgreSQL integration', () => {
     ).toBe(true);
   });
 
-  it('preserves the category when duplicate product creation fails', async () => {
+  it('rolls back a newly upserted category when product creation fails', async () => {
+    const rollbackCategory = 'B8 Rollback Category';
     await expect(
       repository.create({
         sku: skus[0],
         name: 'Duplicate integration product',
         price: 15,
         stock: 1,
-        categoryName,
+        categoryName: rollbackCategory,
       }),
     ).rejects.toBeInstanceOf(ProductSkuConflictError);
     await expect(
-      prisma.category.count({ where: { name: categoryName } }),
-    ).resolves.toBe(1);
+      prisma.category.count({ where: { name: rollbackCategory } }),
+    ).resolves.toBe(0);
   });
 
   it('enforces PostgreSQL uniqueness, checks, NOT NULL, FK and RESTRICT', async () => {
@@ -161,6 +161,14 @@ describe('Products PostgreSQL integration', () => {
         'INSERT INTO "Product" ("sku", "name", "price", "stock", "categoryId", "updatedAt") VALUES ($1, $2, 10, -1, $3, CURRENT_TIMESTAMP)',
         'B8-BAD-STOCK',
         'Bad stock',
+        existingCategory.id,
+      ),
+    ).rejects.toMatchObject({ code: 'P2010' });
+    await expect(
+      prisma.$executeRawUnsafe(
+        'INSERT INTO "Product" ("sku", "name", "price", "stock", "categoryId", "updatedAt") VALUES ($1, $2, 10, 1001, $3, CURRENT_TIMESTAMP)',
+        'B8-EXCESS-STOCK',
+        'Excess stock',
         existingCategory.id,
       ),
     ).rejects.toMatchObject({ code: 'P2010' });

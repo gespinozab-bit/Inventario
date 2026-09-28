@@ -7,7 +7,6 @@ import {
   HttpStatus,
 } from '@nestjs/common';
 import { ProductSkuConflictError } from '../products/application/errors/product-sku-conflict.error';
-import { InventoryError } from './domain/inventory.error';
 
 interface HttpRequest {
   url: string;
@@ -38,14 +37,6 @@ export class HttpExceptionFilter implements ExceptionFilter {
   }
 
   private mapException(exception: unknown, path: string): ErrorBody {
-    if (exception instanceof InventoryError) {
-      const status = {
-        invalid: HttpStatus.BAD_REQUEST,
-        'not-found': HttpStatus.NOT_FOUND,
-        conflict: HttpStatus.CONFLICT,
-      }[exception.kind];
-      return this.body(status, exception.code, exception.message, path);
-    }
     if (exception instanceof ProductSkuConflictError) {
       return this.body(
         HttpStatus.CONFLICT,

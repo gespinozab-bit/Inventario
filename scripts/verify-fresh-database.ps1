@@ -6,6 +6,9 @@ $projectName = 'inventory-history-verification'
 $containerName = 'inventory-history-verification-postgres'
 $composeFile = 'compose.verify.yaml'
 $envFile = '.env.verify'
+$createdTemporaryEnvironment = $false
+$previousDatabaseUrl = $env:DATABASE_URL
+$previousTestPermission = $env:ALLOW_TEST_DATABASE
 
 function Read-VerificationEnvironment {
     if (-not (Test-Path -LiteralPath $envFile)) {
@@ -60,6 +63,9 @@ try {
     if ($verificationEnvironment['VERIFY_DB_PORT'] -eq '5433') {
         throw 'El puerto temporal no puede coincidir con el puerto principal 5433.'
     }
+    if ($verificationEnvironment['VERIFY_DB_NAME'] -notmatch 'verification') {
+        throw 'La base temporal debe tener un nombre de verification.'
+    }
 
     $existingContainer = docker ps -a --filter "name=^/$containerName$" --format '{{.Names}}'
     if ($LASTEXITCODE -ne 0) {
@@ -69,6 +75,7 @@ try {
         throw "El contenedor temporal $containerName ya existe; la prueba exige una base nueva."
     }
 
+    $createdTemporaryEnvironment = $true
     Invoke-ProjectCompose @('up', '-d')
 
     $healthy = $false
@@ -132,15 +139,20 @@ SELECT
 
     & npm.cmd run build
     if ($LASTEXITCODE -ne 0) { throw 'La compilación falló.' }
-    & npm.cmd run test:legacy -- --runInBand
+    & npm.cmd test -- --runInBand
     if ($LASTEXITCODE -ne 0) { throw 'Las pruebas automatizadas fallaron.' }
     $env:ALLOW_TEST_DATABASE = 'true'
-    & npm.cmd run test:integration:legacy
+    & npm.cmd run test:integration
     if ($LASTEXITCODE -ne 0) { throw 'Las pruebas de integración PostgreSQL fallaron.' }
 
     Write-Output "VERIFICATION_OK migrations=$migrationCount counts=$secondCounts invariants=$invariants"
-    Write-Output "El entorno temporal permanece activo para las pruebas HTTP y debe limpiarse sólo con el proyecto $projectName."
 } catch {
     Write-Error $_.Exception.Message
     exit 1
+} finally {
+    $env:DATABASE_URL = $previousDatabaseUrl
+    $env:ALLOW_TEST_DATABASE = $previousTestPermission
+    if ($createdTemporaryEnvironment) {
+        Invoke-ProjectCompose @('down')
+    }
 }

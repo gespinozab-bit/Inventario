@@ -10,7 +10,6 @@ import {
   MaxLength,
   Min,
   MinLength,
-  ValidateIf,
 } from 'class-validator';
 
 const trim = ({ value }: { value: unknown }): unknown =>
@@ -52,23 +51,9 @@ export class CreateProductDto {
   @Max(1000)
   stock!: number;
 
-  @ValidateIf(
-    (dto: CreateProductDto) =>
-      dto.categoryName !== undefined || dto.categoryId === undefined,
-  )
   @Transform(trim)
   @IsString()
   @IsNotEmpty()
   @MaxLength(80)
-  categoryName?: string;
-
-  @ValidateIf(
-    (dto: CreateProductDto) =>
-      dto.categoryId !== undefined || dto.categoryName === undefined,
-  )
-  @Transform(numeric)
-  @IsInt()
-  @Min(1)
-  @Max(2147483647)
-  categoryId?: number;
+  categoryName!: string;
 }

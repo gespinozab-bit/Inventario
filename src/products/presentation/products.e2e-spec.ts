@@ -12,8 +12,6 @@ import {
 } from '../application/ports/product.repository';
 import { Product } from '../domain/product';
 import { ProductsController } from './products.controller';
-import { QueryProductsService } from '../application/query-products.service';
-import { CATEGORY_REPOSITORY } from '../../categories/application/ports/category.repository';
 
 describe('POST /products (e2e)', () => {
   let app: INestApplication;
@@ -21,9 +19,6 @@ describe('POST /products (e2e)', () => {
   let nextId = 1;
 
   const repository: ProductRepository = {
-    findAll: async () => [...products.values()],
-    findById: async (id) =>
-      [...products.values()].find((product) => product.id === id) ?? null,
     findBySku: async (sku) => products.get(sku) ?? null,
     create: async (data) => {
       if (data.sku === 'ERROR-500') {
@@ -33,8 +28,6 @@ describe('POST /products (e2e)', () => {
       const product: Product = {
         id: nextId++,
         ...data,
-        categoryId: data.categoryId!,
-        categoryName: data.categoryName!,
         description: data.description ?? null,
         price: data.price.toFixed(2),
         createdAt: now,
@@ -59,11 +52,6 @@ describe('POST /products (e2e)', () => {
       controllers: [ProductsController],
       providers: [
         CreateProductService,
-        QueryProductsService,
-        {
-          provide: CATEGORY_REPOSITORY,
-          useValue: { findByName: async () => ({ id: 7 }) },
-        },
         { provide: PRODUCT_REPOSITORY, useValue: repository },
       ],
     }).compile();
